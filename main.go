@@ -146,19 +146,20 @@ func playGauge_in(ctx context.Context, g *gauge.Gauge, step int, delay time.Dura
 	progress := 0
 	mult := 1
 
-	in_ready := countFileInDir("./ภายใน/เตรียมแนบ",1)
-	in_done :=  countFileInDir("./ภายใน/เตรียมแนบ/แนบแล้ว",0)
-	in_sum := in_ready + in_done
-
-	if in_sum == 0 {
-		in_sum = 101010101
-	}
+	
 
 	ticker := time.NewTicker(delay)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
+			in_ready := countFileInDir("./ภายใน/เตรียมแนบ",1)
+			in_done :=  countFileInDir("./ภายใน/เตรียมแนบ/แนบแล้ว",0)
+			in_sum := in_ready + in_done
+
+			if in_sum == 0 {
+				in_sum = 101010101
+			}
 			switch pt {
 			case playTypePercent:
 				if err := g.Percent(progress); err != nil {
@@ -196,19 +197,21 @@ func playGauge_out(ctx context.Context, g *gauge.Gauge, step int, delay time.Dur
 	progress := 0
 	mult := 1
 
-	out_ready := countFileInDir("./ภายนอก/เตรียมแนบ",1)
-	out_done := countFileInDir("./ภายนอก/เตรียมแนบ/แนบแล้ว",0)
-	out_sum := out_ready + out_done
-
-	if out_sum == 0 {
-		out_sum = 101010101
-	}
+	
 
 	ticker := time.NewTicker(delay)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
+			
+			out_ready := countFileInDir("./ภายนอก/เตรียมแนบ",1)
+			out_done := countFileInDir("./ภายนอก/เตรียมแนบ/แนบแล้ว",0)
+			out_sum := out_ready + out_done
+
+			if out_sum == 0 {
+				out_sum = 101010101
+			}
 			switch pt {
 			case playTypePercent:
 				if err := g.Percent(progress); err != nil {
@@ -245,6 +248,71 @@ func playGauge_out(ctx context.Context, g *gauge.Gauge, step int, delay time.Dur
 	}
 }
 
+
+
+func playGauge_all(ctx context.Context, g *gauge.Gauge, step int, delay time.Duration, pt playType) {
+	progress := 0
+	mult := 1
+
+	
+
+	ticker := time.NewTicker(delay)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			
+			in_ready := countFileInDir("./ภายใน/เตรียมแนบ",1)
+			in_done :=  countFileInDir("./ภายใน/เตรียมแนบ/แนบแล้ว",0)
+			in_sum := in_ready + in_done
+
+			out_ready := countFileInDir("./ภายนอก/เตรียมแนบ",1)
+			out_done := countFileInDir("./ภายนอก/เตรียมแนบ/แนบแล้ว",0)
+			out_sum := out_ready + out_done
+
+			all_done := in_done + out_done
+			all_sum := in_sum + out_sum
+			
+			if out_sum == 0 {
+				out_sum = 101010101
+			}
+			switch pt {
+			case playTypePercent:
+				if err := g.Percent(progress); err != nil {
+					panic(err)
+				}
+			case playTypeAbsolute:
+				if err := g.Absolute(all_done, all_sum); err != nil {
+					panic(err)
+				}
+			}
+			// out_pro_text := false
+			// if out_sum == 0 {
+			// 	out_pro_text = false
+			// }else{
+			// 	out_pro_text = true
+			// }
+		
+			progress += step * mult
+			if progress > 100 || 100-progress < step {
+				progress = 100
+			} else if progress < 0 || progress < step {
+				progress = 0
+			}
+
+			if progress == 100 {
+				mult = -1
+			} else if progress == 0 {
+				mult = 1
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// regisInNum
 
 func showLog (comment string , data []byte) {
 	fmt.Println("")
@@ -293,7 +361,7 @@ func main() {
 	dirDate := cli.NewCommand("dirDate", "mkdir name=YYMMDD").
 	WithShortcut("dd").
 	WithAction(func(args []string, options map[string]string) int {
-		YYMMDD := string(time.Now().Format("060102"))
+		YYMMDD := string(time.Now().AddDate(543, 0, 0).Format("060102"))
 		mkdirYYMMDD := os.Mkdir(YYMMDD,0666)
 		if mkdirYYMMDD != nil {
 			showErr("error :",mkdirYYMMDD)
@@ -307,7 +375,7 @@ func main() {
 	dirSarabanDocScan := cli.NewCommand("dirSarabanDocScan", "...").
 	WithShortcut("dds").
 	WithAction(func(args []string, options map[string]string) int {
-		YYMMDD := string(time.Now().Format("06.01.02"))
+		YYMMDD := string(time.Now().AddDate(543, 0, 0).Format("06.01.02"))
 		mkdirYYMMDD := os.Mkdir(YYMMDD,0666)
 		if mkdirYYMMDD != nil {
 			showErr("error :",mkdirYYMMDD)
@@ -362,8 +430,16 @@ func main() {
 				gauge.BorderTitle("out doc progress"),
 			)
 			
+			
+			all_pro, err := gauge.New(
+				gauge.Height(1),
+				gauge.Border(linestyle.Light),
+				gauge.BorderTitle("all doc progress"),
+			)
+
 			go playGauge_in(ctx, in_pro, 17, 500*time.Millisecond, playTypeAbsolute)
 			go playGauge_out(ctx, out_pro, 17, 500*time.Millisecond, playTypeAbsolute)
+			go playGauge_all(ctx, all_pro, 17, 500*time.Millisecond, playTypeAbsolute)
 
 			// bc, err := barchart.New(
 				
@@ -409,12 +485,20 @@ func main() {
 						container.BorderTitle("Document Count"),
 						container.SplitHorizontal(
 							container.Top(
-								container.PlaceWidget(in_pro),
+								container.SplitHorizontal(
+									container.Top(
+										container.PlaceWidget(in_pro),
+									),
+									container.Bottom(
+										container.PlaceWidget(out_pro),
+									),
+								),
 							),
 							container.Bottom(
-								container.PlaceWidget(out_pro),
+								container.PlaceWidget(all_pro),
 							),
 						),
+					
 						
 						
 					),

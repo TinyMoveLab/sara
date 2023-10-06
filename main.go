@@ -7,14 +7,14 @@ import (
 	
 	// "os/exec"
 	"fmt"
-	// "strings"
+	"strings"
 	"io/ioutil"
-
+	"path/filepath"
 	"context"
 	// "math/rand"
 	"time"
-
-	
+	"encoding/csv"
+	"github.com/skratchdot/open-golang/open"	
 
 	"github.com/mum4k/termdash"
 	// "github.com/mum4k/termdash/cell"
@@ -25,7 +25,11 @@ import (
 	// "github.com/mum4k/termdash/widgets/barchart"
 	"github.com/mum4k/termdash/widgets/text"
 	"github.com/mum4k/termdash/widgets/gauge"
+	"unicode/utf8"
+
 )
+
+
 
 func countFileInDir(path string,minusBy int)(countFileInDir_out int){
     files,_ := ioutil.ReadDir(path)
@@ -382,18 +386,102 @@ func main() {
 		}else{
 			showLogString("dirDate : ",YYMMDD)
 		}
+		os.Mkdir(YYMMDD+"/ออกเลข",0666)
 		os.Mkdir(YYMMDD+"/ภายนอก",0666)
 		os.Mkdir(YYMMDD+"/ภายใน",0666)
 		os.Mkdir(YYMMDD+"/ไม่เสนอ",0666)
+		os.Mkdir(YYMMDD+"/แจ้งเวียน",0666)
+		
 		os.Mkdir(YYMMDD+"/ภายนอก/เตรียมแนบ",0666)
 		os.Mkdir(YYMMDD+"/ภายใน/เตรียมแนบ",0666)
 		os.Mkdir(YYMMDD+"/ไม่เสนอ/เตรียมแนบ",0666)
 		os.Mkdir(YYMMDD+"/ภายนอก/เตรียมแนบ/แนบแล้ว",0666)
 		os.Mkdir(YYMMDD+"/ภายใน/เตรียมแนบ/แนบแล้ว",0666)
 		os.Mkdir(YYMMDD+"/ไม่เสนอ/เตรียมแนบ/แนบแล้ว",0666)
+		os.Mkdir(YYMMDD+"/แจ้งเวียน/แปลงแล้ว",0666)
+		os.Mkdir(YYMMDD+"/แจ้งเวียน/แปลงแล้ว/เวียนแล้ว",0666)
 		
+		open.Start(YYMMDD)
+
 		return 0
 	})
+
+	genCSV := cli.NewCommand("genCSV", "...").
+	WithShortcut("csv").
+	WithAction(func(args []string, options map[string]string) int {
+
+		targetDirs := []string{"./ภายใน/เตรียมแนบ", "./ภายนอก/เตรียมแนบ"}
+		
+
+		var fileNames []string
+		var docUIDs [][]string
+	
+
+		for _, targetDir := range targetDirs {
+			fileInfos, err := ioutil.ReadDir(targetDir)
+			if err != nil {
+				fmt.Printf("Error reading directory %s: %v\n", targetDir, err)
+				continue
+			}
+
+			for _, fileInfo := range fileInfos {
+				if !fileInfo.IsDir() {
+					fileName := fileInfo.Name()
+					filePath := filepath.Join(targetDir, fileName)
+					fileNames = append(fileNames, filePath)
+				}
+			}
+
+			
+			for _, fileInfo := range fileInfos {
+				if !fileInfo.IsDir() {
+					fileName := fileInfo.Name()
+					parts := strings.Split(fileName, "_")
+					rawDocUID := parts[0]
+					docUIDParts := strings.Split(rawDocUID, " ")
+					docUIDs = append(docUIDs, docUIDParts)
+				}
+			}
+		}
+
+	
+		file, err := os.Create("output.csv")
+		if err != nil {
+			fmt.Println("Error:", err)
+			return 0
+		}
+		defer file.Close()
+	
+		// Write BOM
+		file.Write([]byte{0xEF, 0xBB, 0xBF})
+	
+		writer := csv.NewWriter(file)
+		err = writer.WriteAll(docUIDs)
+		if err != nil {
+			fmt.Println("Error:", err)
+			return 0
+		}
+	
+		// Check file encoding
+		content, err := ioutil.ReadFile("output.csv")
+		if err != nil {
+			fmt.Println("Error:", err)
+			return 0
+		}
+	
+		encoding := "unknown"
+		if utf8.Valid(content) {
+			encoding = "UTF-8"
+			if bytes := content[:3]; bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF {
+				encoding = "UTF-8-BOM"
+			}
+		}
+	
+		fmt.Printf("File encoding: %s\n", encoding)		
+
+		return 0
+	})
+
 
 	dirWatch:= cli.NewCommand("dirWatch", "...").
 	WithShortcut("dw").
@@ -537,7 +625,9 @@ func main() {
 	WithCommand(dirDate).
 	WithCommand(dirSarabanDocScan).
 	WithCommand(dirWatch).
-	WithCommand(showPath)
+	WithCommand(showPath).
+	WithCommand(genCSV)
+	
 
 	
 
